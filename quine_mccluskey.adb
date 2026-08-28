@@ -85,12 +85,11 @@ package body Quine_McCluskey is
       Current_Level : Implicant_List;
       Next_Level    : Implicant_List;
       Primes        : Implicant_List;
-      Has_Merged    : array (1 .. 10000) of Boolean := (others => False); -- Safe arbitrary bounds for typical usage
+      Has_Merged    : array (1 .. 10000) of Boolean := (others => False);
    begin
       if Minterms'Length = 0 then return Primes; end if;
       Validate_Inputs (Num_Vars, Minterms, Dont_Cares);
 
-      -- Initialize Level 0 with both minterms and don't cares
       for M of Minterms loop
          Current_Level.Append (To_Binary (M, Num_Vars));
       end loop;
@@ -98,7 +97,6 @@ package body Quine_McCluskey is
          Current_Level.Append (To_Binary (D, Num_Vars));
       end loop;
 
-      -- Iterate merging until no more merges are possible
       loop
          Next_Level.Clear;
          for I in 1 .. Integer(Current_Level.Length) loop
@@ -121,7 +119,6 @@ package body Quine_McCluskey is
             end loop;
          end loop;
 
-         -- Collect unmerged implicants (These are Prime Implicants)
          for I in 1 .. Integer(Current_Level.Length) loop
             if not Has_Merged (I) then
                if not Primes.Contains (Current_Level.Element (I)) then
@@ -149,68 +146,64 @@ package body Quine_McCluskey is
       Remaining_Targets : Target_List := Targets;
       Active_PIs : Implicant_List := PIs;
    begin
-      if Targets.Is_Empty then return Solution; end if;
+      if Integer(Targets.Length) = 0 then return Solution; end if;
 
       -- 1. Find Essential Prime Implicants
+      -- Replaced `for of` iterator loops with integer indexes to avoid cursor tampering locks
       declare
          Progress : Boolean := True;
       begin
-         while Progress and not Remaining_Targets.Is_Empty loop
+         while Progress and Integer(Remaining_Targets.Length) > 0 loop
             Progress := False;
-            for T of Remaining_Targets loop
+            for I in 1 .. Integer(Remaining_Targets.Length) loop
                declare
+                  T : Natural := Remaining_Targets.Element(I);
                   Cover_Count : Natural := 0;
-                  Last_Cover_PI : String(1 .. Active_PIs.Element(1)'Length) := (others => '0');
+                  Last_Cover_PI_Index : Integer := 0;
                begin
-                  for P of Active_PIs loop
-                     if Covers (P, T) then
+                  for J in 1 .. Integer(Active_PIs.Length) loop
+                     if Covers (Active_PIs.Element(J), T) then
                         Cover_Count := Cover_Count + 1;
-                        Last_Cover_PI := P;
+                        Last_Cover_PI_Index := J;
                      end if;
                   end loop;
 
-                  -- Essential Prime Implicant found
                   if Cover_Count = 1 then
-                     Solution.Append (Last_Cover_PI);
-                     Progress := True;
-                     
-                     -- Remove newly covered minterms
                      declare
+                        Last_Cover_PI : String := Active_PIs.Element(Last_Cover_PI_Index);
                         New_Remaining : Target_List;
+                        New_Active : Implicant_List;
                      begin
-                        for RT of Remaining_Targets loop
-                           if not Covers (Last_Cover_PI, RT) then
-                              New_Remaining.Append (RT);
+                        Solution.Append (Last_Cover_PI);
+                        Progress := True;
+                        
+                        for RT_Idx in 1 .. Integer(Remaining_Targets.Length) loop
+                           if not Covers (Last_Cover_PI, Remaining_Targets.Element(RT_Idx)) then
+                              New_Remaining.Append (Remaining_Targets.Element(RT_Idx));
                            end if;
                         end loop;
                         Remaining_Targets := New_Remaining;
-                     end;
-                     
-                     -- Remove used PI
-                     declare
-                        New_Active : Implicant_List;
-                     begin
-                        for P of Active_PIs loop
-                           if P /= Last_Cover_PI then
-                              New_Active.Append(P);
+                        
+                        for P_Idx in 1 .. Integer(Active_PIs.Length) loop
+                           if Active_PIs.Element(P_Idx) /= Last_Cover_PI then
+                              New_Active.Append(Active_PIs.Element(P_Idx));
                            end if;
                         end loop;
                         Active_PIs := New_Active;
                      end;
-                     exit; -- Break outer loop to restart evaluation
+                     exit;
                   end if;
                end;
             end loop;
          end loop;
       end;
 
-      if Remaining_Targets.Is_Empty then
+      if Integer(Remaining_Targets.Length) = 0 then
          return Solution;
       end if;
 
       -- 2. Solve Cyclic Core
       if Exact then
-         -- Exact/Petrick's Equivalent: Recursive Backtracking
          declare
             Min_Cover : Natural := Natural'Last;
             Best_Cover : Implicant_List;
@@ -218,7 +211,7 @@ package body Quine_McCluskey is
             procedure Recursive_Search (Current_Remaining : Target_List; Current_PIs : Implicant_List; Current_Sol : Implicant_List) is
                Target_To_Cover : Natural;
             begin
-               if Current_Remaining.Is_Empty then
+               if Integer(Current_Remaining.Length) = 0 then
                   if Integer(Current_Sol.Length) < Min_Cover then
                      Min_Cover := Integer(Current_Sol.Length);
                      Best_Cover := Current_Sol;
@@ -226,27 +219,34 @@ package body Quine_McCluskey is
                   return;
                end if;
                
-               -- Prune branch if size already exceeds best
                if Integer(Current_Sol.Length) >= Min_Cover then return; end if;
 
                Target_To_Cover := Current_Remaining.Element(1);
-               for P of Current_PIs loop
-                  if Covers (P, Target_To_Cover) then
-                     declare
-                        Next_Remaining : Target_List;
-                        Next_Sol : Implicant_List := Current_Sol;
-                        Next_PIs : Implicant_List;
-                     begin
-                        for RT of Current_Remaining loop
-                           if not Covers (P, RT) then Next_Remaining.Append(RT); end if;
-                        end loop;
-                        for OP of Current_PIs loop
-                           if OP /= P then Next_PIs.Append(OP); end if;
-                        end loop;
-                        Next_Sol.Append (P);
-                        Recursive_Search (Next_Remaining, Next_PIs, Next_Sol);
-                     end;
-                  end if;
+               for I in 1 .. Integer(Current_PIs.Length) loop
+                  declare
+                     P : String := Current_PIs.Element(I);
+                  begin
+                     if Covers (P, Target_To_Cover) then
+                        declare
+                           Next_Remaining : Target_List;
+                           Next_Sol : Implicant_List := Current_Sol;
+                           Next_PIs : Implicant_List;
+                        begin
+                           for J in 1 .. Integer(Current_Remaining.Length) loop
+                              if not Covers (P, Current_Remaining.Element(J)) then 
+                                 Next_Remaining.Append(Current_Remaining.Element(J)); 
+                              end if;
+                           end loop;
+                           for J in 1 .. Integer(Current_PIs.Length) loop
+                              if Current_PIs.Element(J) /= P then 
+                                 Next_PIs.Append(Current_PIs.Element(J)); 
+                              end if;
+                           end loop;
+                           Next_Sol.Append (P);
+                           Recursive_Search (Next_Remaining, Next_PIs, Next_Sol);
+                        end;
+                     end if;
+                  end;
                end loop;
             end Recursive_Search;
          begin
@@ -254,33 +254,36 @@ package body Quine_McCluskey is
             return Best_Cover;
          end;
       else
-         -- Greedy Approach: Pick PI that covers the most remaining minterms
-         while not Remaining_Targets.Is_Empty loop
+         while Integer(Remaining_Targets.Length) > 0 loop
+            if Integer(Active_PIs.Length) = 0 then exit; end if;
             declare
-               Best_PI : String (1 .. Active_PIs.Element(1)'Length) := Active_PIs.Element(1);
+               Best_PI_Index : Integer := 1;
                Max_Covered : Natural := 0;
             begin
-               for P of Active_PIs loop
+               for I in 1 .. Integer(Active_PIs.Length) loop
                   declare
+                     P : String := Active_PIs.Element(I);
                      Count : Natural := 0;
                   begin
-                     for T of Remaining_Targets loop
-                        if Covers (P, T) then Count := Count + 1; end if;
+                     for J in 1 .. Integer(Remaining_Targets.Length) loop
+                        if Covers (P, Remaining_Targets.Element(J)) then Count := Count + 1; end if;
                      end loop;
                      if Count > Max_Covered then
                         Max_Covered := Count;
-                        Best_PI := P;
+                        Best_PI_Index := I;
                      end if;
                   end;
                end loop;
 
-               Solution.Append (Best_PI);
-               
                declare
+                  Best_PI : String := Active_PIs.Element(Best_PI_Index);
                   New_Remaining : Target_List;
                begin
-                  for RT of Remaining_Targets loop
-                     if not Covers (Best_PI, RT) then New_Remaining.Append (RT); end if;
+                  Solution.Append (Best_PI);
+                  for J in 1 .. Integer(Remaining_Targets.Length) loop
+                     if not Covers (Best_PI, Remaining_Targets.Element(J)) then 
+                        New_Remaining.Append (Remaining_Targets.Element(J)); 
+                     end if;
                   end loop;
                   Remaining_Targets := New_Remaining;
                end;
