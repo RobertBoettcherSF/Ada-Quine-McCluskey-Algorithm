@@ -36,7 +36,7 @@ begin
    Put_Line ("TEST 3 - Empty Input Handling");
    Put_Line ("  3.1 Assert empty minterm array returns empty solution");
    Result := Minimize_Exact (3, Empty_M, Empty_M);
-   Assert (Result.Is_Empty, "Empty minterms failed");
+   Assert (Integer(Result.Length) = 0, "Empty minterms failed");
    Put_Line ("     PASS");
 
    -- TEST 4 - Full Truth Table Tautology
@@ -61,7 +61,7 @@ begin
    Put_Line ("     PASS");
    Put_Line ("  6.2 Assert pure Don't Cares without minterms returns empty");
    Result := Minimize_Exact (2, Empty_M, (1, 2));
-   Assert (Result.Is_Empty, "Pure dont cares failed");
+   Assert (Integer(Result.Length) = 0, "Pure dont cares failed");
    Put_Line ("     PASS");
 
    -- TEST 7 - Exception Handling & Robustness
@@ -84,17 +84,16 @@ begin
    -- TEST 8 - Cyclic Core (Petrick's Method differentiation)
    Put_Line ("TEST 8 - Cyclic Core Resolution");
    Put_Line ("  8.1 Assert 3-var Minterms(0,1,2,5,6,7) uses exact solver correctly (length 3)");
-   -- Cyclic core usually results in minimum length of 3 here
    Result := Minimize_Exact (3, (0, 1, 2, 5, 6, 7), Empty_M);
    Assert (Integer(Result.Length) = 3, "Cyclic core exact failed");
    Put_Line ("     PASS");
 
    -- TEST 9 - Wikipedia Example functional check
    Put_Line ("TEST 9 - Wikipedia 4-Var Example");
-   Put_Line ("  9.1 Assert Wikipedia example returns 4 terms");
-   -- Minterms: 4,8,10,11,12,15. Dont_Cares: 9,14. (Equation: f(A,B,C,D) -> 4 Prime Implicants)
+   Put_Line ("  9.1 Assert Wikipedia example logically reduces to exactly 3 terms");
+   -- Minterms: 4,8,10,11,12,15. Dont_Cares: 9,14. (Equation: f(A,B,C,D) mathematically resolves to 3 optimal Prime Implicants)
    Result := Minimize_Exact (4, (4, 8, 10, 11, 12, 15), (9, 14));
-   Assert (Integer(Result.Length) = 4, "Wikipedia example failed");
+   Assert (Integer(Result.Length) = 3, "Wikipedia example failed: Algorithm did not find the mathematically optimal 3 terms");
    Put_Line ("     PASS");
 
    Put_Line ("======================================================");
